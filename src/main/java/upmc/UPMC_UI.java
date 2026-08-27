@@ -1,7 +1,5 @@
 package upmc;
 
-import gnu.io.SerialPort;
-
 import java.awt.EventQueue;
 
 import javax.swing.JFrame;

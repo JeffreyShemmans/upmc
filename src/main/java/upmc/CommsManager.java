@@ -4,7 +4,7 @@
  */
 package upmc;
 
-import gnu.io.*;
+import com.fazecast.jSerialComm.SerialPort;
 import java.net.*;
 //import java.io.*;
 
@@ -16,7 +16,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.DateFormat;
 import java.util.Date;
-import java.util.Enumeration;
 import java.util.Vector;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -40,8 +39,8 @@ import java.util.logging.*;
 import upmc.UPMC_UI.MessageData;
 
 /**
- * Used to simplify communication over a Serial port. Using the RXTX-library
- * (rxtx.qbang.org), one connection per instance of this class can be handled.
+ * Used to simplify communication over a serial port. Using jSerialComm, one
+ * connection per instance of this class can be handled.
  * In addition to handling a connection, information about the available Serial
  * ports can be received using this class.
  * 
@@ -54,7 +53,7 @@ import upmc.UPMC_UI.MessageData;
  * {@link net.Network_iface}-interface.
  * 
  * @author Raphael Blatter (raphael@blatter.sg)
- * @author heavily using code examples from the RXTX-website (rxtx.qbang.org)
+ * @author heavily using code examples from the former RXTX implementation
  */
 public class CommsManager
 {
@@ -360,18 +359,10 @@ public class CommsManager
 	@SuppressWarnings("unchecked")
 	public Vector<String> getPortList()
 	{
-		Enumeration<CommPortIdentifier> portList;
 		Vector<String> portVect = new Vector<String>();
-		portList = CommPortIdentifier.getPortIdentifiers();
-
-		CommPortIdentifier portId;
-		while (portList.hasMoreElements())
+		for (SerialPort port : SerialPort.getCommPorts())
 		{
-			portId = (CommPortIdentifier) portList.nextElement();
-			if (portId.getPortType() == CommPortIdentifier.PORT_SERIAL)
-			{
-				portVect.add(portId.getName());
-			}
+			portVect.add(port.getSystemPortPath());
 		}
 		// contact.writeLog(id, "found the following ports:");
 		System.out.println("found the following ports:");
@@ -575,7 +566,6 @@ public class CommsManager
 	 */
 	public boolean connect(String portName, int baudrate, int parity, int databits, int stopbits, int flowcontrol, MessageData data)
 	{
-		CommPortIdentifier portIdentifier;
 		boolean conn = false;
 		try
 		{
@@ -584,101 +574,45 @@ public class CommsManager
 			appendNewLine = data.appendNewline;
 			appendNewLineTimeout = data.appendNewLineTimeout;
 
-			Enumeration pList = CommPortIdentifier.getPortIdentifiers();
-			while (pList.hasMoreElements())
-			{
-				CommPortIdentifier cpi = (CommPortIdentifier) pList.nextElement();
-			}
+			serialPort = SerialPort.getCommPort(portName);
+			if (!serialPort.setComPortParameters(baudrate, databits, SerialSettings.stopBits(stopbits), SerialSettings.parity(parity)))
+				throw new IllegalStateException("Serial-port parameters are not supported");
+			if (!serialPort.setFlowControl(SerialSettings.flowControl(flowcontrol)))
+				throw new IllegalStateException("Serial-port flow control is not supported");
+			if (!serialPort.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0))
+				throw new IllegalStateException("Serial-port timeout mode is not supported");
 
-			portIdentifier = CommPortIdentifier.getPortIdentifier(portName);
-			if (portIdentifier.isCurrentlyOwned())
+			if (!serialPort.openPort())
 			{
-				System.out.println("Error: Port is currently in use");
+				System.out.println("Error: Port could not be opened");
 				if (statusLabel != null)
-					statusLabel.setText("Error: Port is currently in use");
+					statusLabel.setText("Port could not be opened (it may be in use)");
+				serialPort = null;
 			}
 			else
 			{
-				serialPort = (SerialPort) portIdentifier.open(this.getClass().getName(), 2000);
+				inStream = serialPort.getInputStream();
+				outStream = serialPort.getOutputStream();
+				inStreamThread = (new Thread(new InputStreamReader(inStream)));
+				threadEnd = false;
+				inStreamThread.start();
 
-				if (serialPort instanceof SerialPort)
-				{
-					serialPort.setSerialPortParams(baudrate, databits, stopbits, parity);
-					switch (flowcontrol)
-					{
-						case 0:
-							serialPort.setFlowControlMode(SerialPort.FLOWCONTROL_NONE);
-							break;
-						case 1:
-							serialPort.setFlowControlMode(SerialPort.FLOWCONTROL_RTSCTS_IN | SerialPort.FLOWCONTROL_RTSCTS_OUT);
-							break;
-						case 2:
-							serialPort.setFlowControlMode(SerialPort.FLOWCONTROL_XONXOFF_IN | SerialPort.FLOWCONTROL_XONXOFF_OUT);
-							break;
-						default:
-							break;
-					}
+				System.out.println("Connection on " + portName + " established");
+				if (statusLabel != null)
+					statusLabel.setText("Connection on " + portName + " established");
 
-					int temp = serialPort.getFlowControlMode();
-
-					// FLOWCONTROL_NONE = 0, FLOWCONTROL_RTSCTS_IN = 1,
-					// FLOWCONTROL_RTSCTS_OUT = 2, FLOWCONTROL_XONXOFF_IN = 4,
-					// FLOWCONTROL_XONXOFF_OUT = 8
-					int i = SerialPort.FLOWCONTROL_NONE; // 0
-					i = SerialPort.FLOWCONTROL_RTSCTS_IN; // 1
-					i = SerialPort.FLOWCONTROL_RTSCTS_OUT; // 2
-					i = SerialPort.FLOWCONTROL_XONXOFF_IN; // 4
-					i = SerialPort.FLOWCONTROL_XONXOFF_OUT; // 8
-					// serialPort.set
-
-					inStream = serialPort.getInputStream();
-					outStream = serialPort.getOutputStream();
-					inStreamThread = (new Thread(new InputStreamReader(inStream)));
-					threadEnd = false;
-					inStreamThread.start();
-
-					// contact.writeLog(id, "Connection on " + portName +
-					// " established");
-					System.out.println("Connection on " + portName + " established");
-					if (statusLabel != null)
-						statusLabel.setText("Connection on " + portName + " established");
-
-					// propSupport.firePropertyChange("State", "STOPPED",
-					// "STARTED");
-					propSupport.firePropertyChange("CommsManager", connection, CONNECTION_STARTED);
-					connection = CONNECTION_STARTED;
-				}
-				else
-				{
-					System.out.println("Only serial ports are handled");
-					if (statusLabel != null)
-						statusLabel.setText("Only Serial ports are handled");
-				}
+				propSupport.firePropertyChange("CommsManager", connection, CONNECTION_STARTED);
+				connection = CONNECTION_STARTED;
+				conn = true;
 			}
-		}
-		catch (NoSuchPortException e)
-		{
-			statusLabel.setText("No such Port!");
-			// e.printStackTrace();
-		}
-		catch (PortInUseException e)
-		{
-			statusLabel.setText("Port in use!");
-			// e.printStackTrace();
-		}
-		catch (UnsupportedCommOperationException e)
-		{
-			statusLabel.setText("The connection could not be made");
-			e.printStackTrace();
-		}
-		catch (IOException e)
-		{
-			statusLabel.setText("The connection could not be made");
-			e.printStackTrace();
 		}
 		catch (Exception e)
 		{
-			statusLabel.setText("Connection BOMMED!");
+			if (serialPort != null && serialPort.isOpen())
+				serialPort.closePort();
+			serialPort = null;
+			if (statusLabel != null)
+				statusLabel.setText("The connection could not be made: " + e.getMessage());
 			e.printStackTrace();
 		}
 		return conn;
@@ -1584,7 +1518,8 @@ public class CommsManager
 
 		if (serialPort != null)
 		{
-			serialPort.close();
+			if (!serialPort.closePort())
+				disconn = false;
 			serialPort = null;
 		}
 

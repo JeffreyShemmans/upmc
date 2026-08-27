@@ -4,11 +4,9 @@
  */
 package upmc;
 
-import gnu.io.CommPortIdentifier;
-import gnu.io.SerialPort;
+import com.fazecast.jSerialComm.SerialPort;
 
 import java.awt.Component;
-import java.util.Enumeration;
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.GroupLayout;
 import javax.swing.border.CompoundBorder;
@@ -59,7 +57,7 @@ public class PortSettings extends javax.swing.JDialog
     // STOPBITS_1 = 1, STOPBITS_1_5 = 3 STOPBITS_2 = 2
     private int stopbits = 1;       
     
-    // FLOWCONTROL_NONE = 0, FLOWCONTROL_RTSCTS_IN = 1, FLOWCONTROL_RTSCTS_OUT = 2, FLOWCONTROL_XONXOFF_IN = 4, FLOWCONTROL_XONXOFF_OUT = 8
+    // NONE = 0, HARDWARE = 1, SOFTWARE = 2
     private int flowcontrol = 0;    
 
     public final static int NULL = 0;
@@ -311,20 +309,14 @@ public class PortSettings extends javax.swing.JDialog
         cmbPort.removeAllItems();
 
 //        int cntr = 0;
-        Enumeration pList = CommPortIdentifier.getPortIdentifiers();
-        while (pList.hasMoreElements())
+        for (SerialPort serialPort : SerialPort.getCommPorts())
         {
-//            cntr++;
-            CommPortIdentifier cpi = (CommPortIdentifier) pList.nextElement();
-            if (cpi.getPortType() == CommPortIdentifier.PORT_SERIAL)
-            {
-                count++;
-                System.out.print("Port " + cpi.getName() + " ");
-                cmbPort.addItem(cpi.getName());
-            }
-            if (count == 0)
-                cmbPort.setEnabled(false);
+            count++;
+            String portPath = serialPort.getSystemPortPath();
+            System.out.print("Port " + portPath + " ");
+            cmbPort.addItem(portPath);
         }
+        cmbPort.setEnabled(count > 0);
 //        System.out.print("Searched through " + cntr + " files");
     }
 
@@ -527,7 +519,7 @@ public class PortSettings extends javax.swing.JDialog
         lblFlowcontrol.setText("FlowCtrl");
         lblFlowcontrol.setFont(new Font("Dialog", Font.BOLD, 10));
         // cmbParity = new javax.swing.JComboBox();
-        cmbParity = new javax.swing.JComboBox<SerialPort>();
+        cmbParity = new javax.swing.JComboBox<String>();
         cmbParity.setPreferredSize(new Dimension(32, 18));
         
                 cmbParity.setFont(new java.awt.Font("Dialog", 1, 10));
