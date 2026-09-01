@@ -56,5 +56,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: upmc-standalone
-          path: ${{ steps.artifact.outputs.jar }}
+          path: |
+            ${{ steps.artifact.outputs.jar }}
+            upmc.sh
+            upmc.bat
           if-no-files-found: error

@@ -58,5 +58,7 @@ jobs:
         run: >-
           gh release create "$GITHUB_REF_NAME"
           "${{ steps.artifact.outputs.jar }}"
+          upmc.sh
+          upmc.bat
           --title "UPMC $GITHUB_REF_NAME"
           --generate-notes
