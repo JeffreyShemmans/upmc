@@ -1227,7 +1227,7 @@ public class UPMC_UI extends JFrame
 	{
 		String aboutText = "A little app to compile different protocols for serial and tcp ports\n" + "Version " + getApplicationVersion() + "\n\n"
 
-		+ "Changelog:\n" + "Version 1.2.0:\n- Replace RXTX with jSerialComm\n- Add standalone packaging and CI\n" + "Version 1.1.8:\n- Fix buffer length for NSP2\n" + "Version 1.1.7:\n- Add ExtraView\n" +"Version 1.1.6:\n" + "- Made that the TX and Rx Boxes only keep 500 lines of data\n" + "Version 1.1.5:\n" + "- Bug fix on nsp1 & nsp2 multiple packet stream error\n"
+		+ "Changelog:\n" + "Unreleased:\n- Support multiple simultaneous TCP server clients\n- Broadcast manual server sends to all connected clients\n- Route simulator replies only to the originating client\n- Keep remaining clients connected when one disconnects\n- Show the connected TCP client count\n" + "Version 1.2.0:\n- Replace RXTX with jSerialComm\n- Add standalone packaging and CI\n" + "Version 1.1.8:\n- Fix buffer length for NSP2\n" + "Version 1.1.7:\n- Add ExtraView\n" +"Version 1.1.6:\n" + "- Made that the TX and Rx Boxes only keep 500 lines of data\n" + "Version 1.1.5:\n" + "- Bug fix on nsp1 & nsp2 multiple packet stream error\n"
 		+ "Version 1.1.4:\n" + "- Bug fix on nsp2 receive timeout\n" + "Version 1.1.3:\n" + "- Made simulation table variable\n" + "- Added support for old SPMC nsp type files\n"
 		+ "Version 1.1.2:\n" + "- Fixed incorrect TCP server save / load settings\n" + "- Fixed close and open issue when clicking on port settings, when port was open\n"
 		+ "- Added Flowcontrol options\n" + "- Bug Fixes\n" + "Version 1.1.1:\n" + "- Fixed issue when usb cable disconnected, causing app to crash with open button\n"
