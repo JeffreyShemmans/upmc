@@ -6,7 +6,7 @@
 
     <groupId>io.github.jeffreyshemmans</groupId>
     <artifactId>upmc</artifactId>
-    <version>1.1.8-SNAPSHOT</version>
+    <version>1.2.0</version>
     <name>UPMC</name>
     <description>Universal Port Message Compiler</description>
     <url>https://github.com/JeffreyShemmans/upmc</url>

@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,7 +37,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          timeout 10s xvfb-run --auto-servernum java -jar target/upmc-1.1.8-SNAPSHOT.jar
+          timeout 10s xvfb-run --auto-servernum java -jar target/upmc-1.2.0.jar
           status=$?
           set -e
           if [ "$status" -ne 124 ]; then
@@ -44,5 +49,5 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: upmc-standalone
-          path: target/upmc-1.1.8-SNAPSHOT.jar
+          path: target/upmc-1.2.0.jar
           if-no-files-found: error

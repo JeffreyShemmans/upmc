@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test
+        run: mvn --batch-mode clean package
+
+      - name: Resolve release artifact
+        id: artifact
+        shell: bash
+        run: |
+          version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match project version $version"
+            exit 1
+          fi
+          echo "jar=target/upmc-$version.jar" >> "$GITHUB_OUTPUT"
+
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+
+      - name: Smoke-test standalone application
+        shell: bash
+        run: |
+          set +e
+          timeout 10s xvfb-run --auto-servernum java -jar "${{ steps.artifact.outputs.jar }}"
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            echo "Application exited unexpectedly with status $status"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          "${{ steps.artifact.outputs.jar }}"
+          --title "UPMC $GITHUB_REF_NAME"
+          --generate-notes

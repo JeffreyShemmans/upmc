@@ -9,11 +9,11 @@ build output are intentionally excluded.
 
 ## Run
 
-Download the packaged JAR from a successful GitHub Actions run, then launch it
-with a Java runtime:
+Download `upmc-1.2.0.jar` from the latest GitHub Release, then launch it with a
+Java runtime:
 
 ```shell
-java -jar upmc-1.1.8-SNAPSHOT.jar
+java -jar upmc-1.2.0.jar
 ```
 
 No Maven installation or source checkout is required to run the packaged
@@ -29,18 +29,20 @@ mvn clean package
 ```
 
 The standalone executable is written to
-`target/upmc-1.1.8-SNAPSHOT.jar` and contains the JDOM and jSerialComm runtime
+`target/upmc-1.2.0.jar` and contains the JDOM and jSerialComm runtime
 dependencies. Launch the locally built package with:
 
 ```shell
-java -jar target/upmc-1.1.8-SNAPSHOT.jar
+java -jar target/upmc-1.2.0.jar
 ```
 
 ## Continuous integration
 
-GitHub Actions builds and tests UPMC on every push and pull request. Each
-successful run also smoke-tests the executable JAR and publishes it as the
-`upmc-standalone` workflow artifact.
+GitHub Actions builds and tests UPMC for pull requests and pushes to `main`.
+The workflow can also be run manually against any branch from the Actions tab.
+Each successful run smoke-tests the executable JAR and publishes it as the
+`upmc-standalone` workflow artifact. Pushing a version tag such as `v1.2.0`
+builds the same source and publishes the JAR as a GitHub Release download.
 
 ## Tested communication
 
