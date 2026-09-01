@@ -1225,9 +1225,9 @@ public class UPMC_UI extends JFrame
 
 	private void showAbout()
 	{
-		JOptionPane.showMessageDialog(this, "A little app to compile different protocols for serial and tcp ports\n" + "Version 1.1.8\n\n"
+		JOptionPane.showMessageDialog(this, "A little app to compile different protocols for serial and tcp ports\n" + "Version " + getApplicationVersion() + "\n\n"
 
-		+ "Changelog:\n" + "Version 1.1.8:\n- Fix buffer length for NSP2\n" + "Version 1.1.7:\n- Add ExtraView\n" +"Version 1.1.6:\n" + "- Made that the TX and Rx Boxes only keep 500 lines of data\n" + "Version 1.1.5:\n" + "- Bug fix on nsp1 & nsp2 multiple packet stream error\n"
+		+ "Changelog:\n" + "Version 1.2.0:\n- Replace RXTX with jSerialComm\n- Add standalone packaging and CI\n" + "Version 1.1.8:\n- Fix buffer length for NSP2\n" + "Version 1.1.7:\n- Add ExtraView\n" +"Version 1.1.6:\n" + "- Made that the TX and Rx Boxes only keep 500 lines of data\n" + "Version 1.1.5:\n" + "- Bug fix on nsp1 & nsp2 multiple packet stream error\n"
 		+ "Version 1.1.4:\n" + "- Bug fix on nsp2 receive timeout\n" + "Version 1.1.3:\n" + "- Made simulation table variable\n" + "- Added support for old SPMC nsp type files\n"
 		+ "Version 1.1.2:\n" + "- Fixed incorrect TCP server save / load settings\n" + "- Fixed close and open issue when clicking on port settings, when port was open\n"
 		+ "- Added Flowcontrol options\n" + "- Bug Fixes\n" + "Version 1.1.1:\n" + "- Fixed issue when usb cable disconnected, causing app to crash with open button\n"
@@ -1238,6 +1238,12 @@ public class UPMC_UI extends JFrame
 		+ "- Add to save file the append newline and newline timeout (Not compattible with nsp file anymore)\n" + "- Bug fixes\n" + "Version 1.0.4:\n" + "- Fixed slider at stop possition\n"
 		+ "- Fixed 'open port' when no port is available\n" + "- Fixed minor bugs, issues & icons\n" + "- Added Text mode\n" + "- Changed colours and font size in the Tx and Rx text areas\n",
 		"UPMC - About", 3);
+	}
+
+	private static String getApplicationVersion()
+	{
+		String version = UPMC_UI.class.getPackage().getImplementationVersion();
+		return version == null ? "development" : version;
 	}
 
 	private void newMsg()
