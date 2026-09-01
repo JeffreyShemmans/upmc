@@ -9,7 +9,7 @@ for %%F in ("%~dp0upmc-*.jar") do if exist "%%~fF" (
     set "UPMC_JAR=%%~fF"
 )
 
-where java.exe >nul 2>&1
+where javaw.exe >nul 2>&1
 if errorlevel 1 (
     echo Java is not installed or is not available on PATH. Install Java, then try UPMC again. 1>&2
     pause
@@ -28,5 +28,5 @@ if %JAR_COUNT% gtr 1 (
     exit /b 1
 )
 
-java.exe -Xmx384m -Duser.country=US -Duser.language=en -jar "%UPMC_JAR%" %*
-exit /b %ERRORLEVEL%
+start "" javaw.exe -Xmx384m -Duser.country=US -Duser.language=en -jar "%UPMC_JAR%" %*
+exit /b 0
