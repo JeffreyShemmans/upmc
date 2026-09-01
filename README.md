@@ -30,23 +30,15 @@ historical baseline.
 
 ## Current limitations
 
-UPMC still uses the historical RXTX serial-port library. Maven supplies its
-Java library, but RXTX also requires a platform-specific native library such
-as `librxtxSerial.so` on Linux. Opening Port Setup without that library produces
-an `UnsatisfiedLinkError`.
+UPMC uses jSerialComm for cross-platform serial-port access. Its platform
+libraries are included in the Maven dependency, so RXTX and a custom
+`java.library.path` are no longer required.
 
-If a compatible RXTX native library is already installed, its directory can be
-provided when starting Maven:
-
-```shell
-MAVEN_OPTS="-Djava.library.path=/path/to/rxtx/native-libraries" mvn exec:java
-```
-
-The original application has been tested using an RXTX 2.2pre2 Linux native
-library with the RXTX 2.1-7 Java library. Port enumeration worked, but RXTX
-reported a version-mismatch warning. Serial communication has not yet been
-validated on modern Linux. Replacing RXTX with a maintained serial library is
-planned; until then, serial support should be considered experimental.
+Port enumeration and serial-settings translation have been tested on OpenJDK
+21. End-to-end serial communication still requires testing with physical or
+loopback hardware. On Linux, the current user must have permission to access
+the selected serial device; this commonly means membership in the `dialout`
+group.
 
 ## License
 
