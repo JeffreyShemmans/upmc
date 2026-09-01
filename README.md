@@ -66,11 +66,16 @@ UPMC uses jSerialComm for cross-platform serial-port access. Its platform
 libraries are included in the Maven dependency, so RXTX and a custom
 `java.library.path` are no longer required.
 
-Serial communication has been tested successfully with a USB-to-serial adapter
-and loopback connection. The TCP client and TCP server have also been tested
-and continue to work as before. On Linux, the current user must have permission
-to access the selected serial device; this commonly means membership in the
-`dialout` group.
+The v1.2.0 standalone JAR and platform launchers have been tested successfully
+on Debian 13 and Windows 10. Windows 10 validation on 1 September 2026 included
+launching with `upmc.bat`, detecting an FTDI Quad RS-232-HS USB-to-serial
+adapter (`0403:6011`), and communicating through its serial ports. Serial
+communication has also been tested on Linux with a USB-to-serial adapter and
+loopback connection.
+
+The TCP client and TCP server continue to work on both platforms. On Linux, the
+current user must have permission to access the selected serial device; this
+commonly means membership in the `dialout` group.
 
 ## License
 
