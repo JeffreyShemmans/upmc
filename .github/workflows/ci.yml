@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test
+        run: mvn --batch-mode clean package
+
+      - name: Install virtual display
+        run: sudo apt-get update && sudo apt-get install --yes xvfb
+
+      - name: Smoke-test standalone application
+        shell: bash
+        run: |
+          set +e
+          timeout 10s xvfb-run --auto-servernum java -jar target/upmc-1.1.8-SNAPSHOT.jar
+          status=$?
+          set -e
+          if [ "$status" -ne 124 ]; then
+            echo "Application exited unexpectedly with status $status"
+            exit 1
+          fi
+
+      - name: Upload standalone application
+        uses: actions/upload-artifact@v7
+        with:
+          name: upmc-standalone
+          path: target/upmc-1.1.8-SNAPSHOT.jar
+          if-no-files-found: error
