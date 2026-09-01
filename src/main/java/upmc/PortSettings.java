@@ -312,9 +312,9 @@ public class PortSettings extends javax.swing.JDialog
         for (SerialPort serialPort : SerialPort.getCommPorts())
         {
             count++;
-            String portPath = serialPort.getSystemPortPath();
-            System.out.print("Port " + portPath + " ");
-            cmbPort.addItem(portPath);
+            String portName = serialPort.getSystemPortName();
+            System.out.print("Port " + portName + " ");
+            cmbPort.addItem(portName);
         }
         cmbPort.setEnabled(count > 0);
 //        System.out.print("Searched through " + cntr + " files");

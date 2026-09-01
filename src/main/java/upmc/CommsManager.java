@@ -362,7 +362,7 @@ public class CommsManager
 		Vector<String> portVect = new Vector<String>();
 		for (SerialPort port : SerialPort.getCommPorts())
 		{
-			portVect.add(port.getSystemPortPath());
+			portVect.add(port.getSystemPortName());
 		}
 		// contact.writeLog(id, "found the following ports:");
 		System.out.println("found the following ports:");
