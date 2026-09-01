@@ -1225,7 +1225,7 @@ public class UPMC_UI extends JFrame
 
 	private void showAbout()
 	{
-		JOptionPane.showMessageDialog(this, "A little app to compile different protocols for serial and tcp ports\n" + "Version " + getApplicationVersion() + "\n\n"
+		String aboutText = "A little app to compile different protocols for serial and tcp ports\n" + "Version " + getApplicationVersion() + "\n\n"
 
 		+ "Changelog:\n" + "Version 1.2.0:\n- Replace RXTX with jSerialComm\n- Add standalone packaging and CI\n" + "Version 1.1.8:\n- Fix buffer length for NSP2\n" + "Version 1.1.7:\n- Add ExtraView\n" +"Version 1.1.6:\n" + "- Made that the TX and Rx Boxes only keep 500 lines of data\n" + "Version 1.1.5:\n" + "- Bug fix on nsp1 & nsp2 multiple packet stream error\n"
 		+ "Version 1.1.4:\n" + "- Bug fix on nsp2 receive timeout\n" + "Version 1.1.3:\n" + "- Made simulation table variable\n" + "- Added support for old SPMC nsp type files\n"
@@ -1236,8 +1236,17 @@ public class UPMC_UI extends JFrame
 		+ "- Fixed log file extension (*.log)\n" + "- Add to save file the the interface and tcp info\n" + "- Implememted the 'File->New' feature\n"
 		+ "- Changed the xml file extension to *.upm (was *.nsp)\n" + "- Minor bug fixes\n" + "Version 1.0.5:\n" + "- Implemented TCP Server and TCP Slave\n"
 		+ "- Add to save file the append newline and newline timeout (Not compattible with nsp file anymore)\n" + "- Bug fixes\n" + "Version 1.0.4:\n" + "- Fixed slider at stop possition\n"
-		+ "- Fixed 'open port' when no port is available\n" + "- Fixed minor bugs, issues & icons\n" + "- Added Text mode\n" + "- Changed colours and font size in the Tx and Rx text areas\n",
-		"UPMC - About", 3);
+		+ "- Fixed 'open port' when no port is available\n" + "- Fixed minor bugs, issues & icons\n" + "- Added Text mode\n" + "- Changed colours and font size in the Tx and Rx text areas\n";
+
+		JTextArea aboutArea = new JTextArea(aboutText, 18, 58);
+		aboutArea.setEditable(false);
+		aboutArea.setLineWrap(true);
+		aboutArea.setWrapStyleWord(true);
+		aboutArea.setCaretPosition(0);
+		aboutArea.setBackground(UIManager.getColor("Panel.background"));
+
+		JScrollPane aboutScrollPane = new JScrollPane(aboutArea);
+		JOptionPane.showMessageDialog(this, aboutScrollPane, "UPMC - About", JOptionPane.INFORMATION_MESSAGE);
 	}
 
 	private static String getApplicationVersion()
