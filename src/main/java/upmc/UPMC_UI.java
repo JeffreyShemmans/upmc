@@ -136,7 +136,7 @@ public class UPMC_UI extends JFrame
 
 	private PopupSource popupSource = PopupSource.NONE;
 
-	public class MessageData
+	public static class MessageData
 	{
 		int tcpMode = PortSettings.TCP_CLIENT;
 

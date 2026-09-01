@@ -115,7 +115,6 @@ public class TcpServer
     public final static String STATE_PROP = "state";
 
     private Collection<Listener> listeners = new LinkedList<Listener>(); // Event listeners
-    private Event event = new Event(this); // Shared event
     private PropertyChangeSupport propSupport = new PropertyChangeSupport(this); // Properties
 
     private TcpServer This = this; // To aid in synchronizing
@@ -491,6 +490,7 @@ public class TcpServer
     {
 
         final TcpServer.Listener[] ll = listeners.toArray(new TcpServer.Listener[listeners.size()]);
+        final Event socketEvent = new Event(this, this.socket);
 
         // Make a Runnable object to execute the calls to listeners.
         // In the event we don't have an Executor, this results in
@@ -504,7 +504,7 @@ public class TcpServer
                 {
                     try
                     {
-                        l.socketReceived(event);
+                        l.socketReceived(socketEvent);
                     }
                     catch (Exception exc)
                     {
@@ -669,7 +669,7 @@ public class TcpServer
     /* ******** ******** */
 
     /**
-     * An interface for listening to events from a {@link TcpServer}. A single {@link Event} is shared for all invocations of these methods.
+     * An interface for listening to events from a {@link TcpServer}. Each socket event captures the accepted socket so asynchronous listeners cannot observe a later connection by mistake.
      * 
      * <p>
      * This code is released into the Public Domain. Since this is Public Domain, you don't need to worry about licensing, and you can simply copy this TcpServer.java file to your own package and use
@@ -776,6 +776,7 @@ public class TcpServer
     {
 
         private final static long serialVersionUID = 1;
+        private final Socket socket;
 
         /**
          * Creates a Event based on the given {@link TcpServer}.
@@ -785,7 +786,13 @@ public class TcpServer
          */
         public Event(TcpServer src)
         {
+            this(src, null);
+        }
+
+        private Event(TcpServer src, Socket socket)
+        {
             super(src);
+            this.socket = socket;
         }
 
         /**
@@ -810,13 +817,13 @@ public class TcpServer
         }
 
         /**
-         * Returns the most recent datagram packet received by the {@link TcpServer}. Shorthand for <tt>getTcpServer().getPacket()</tt>.
+         * Returns the socket captured when this event was created.
          * 
          * @return the most recent datagram
          */
         public Socket getSocket()
         {
-            return getTcpServer().getSocket();
+            return socket != null ? socket : getTcpServer().getSocket();
         }
 
     } // end static inner class Event

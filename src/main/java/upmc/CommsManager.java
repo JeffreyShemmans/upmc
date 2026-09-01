@@ -16,7 +16,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.DateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Vector;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.beans.PropertyChangeEvent;
@@ -57,6 +59,8 @@ import upmc.UPMC_UI.MessageData;
  */
 public class CommsManager
 {
+	private static final Logger LOGGER = Logger.getLogger(CommsManager.class.getName());
+
 	// public enum InterfaceType
 	// {
 	// Serial, TCP
@@ -89,16 +93,17 @@ public class CommsManager
 	// The Thread used to receive the data from the Serial interface.
 	private SerialPort serialPort = null;
 	private Socket tcpClientSocket = null;
-	private Socket tcpServerSocket = null;
+	private final List<TcpClientSession> tcpServerClients = new CopyOnWriteArrayList<TcpClientSession>();
+	private int tcpMode = 0;
 
-	private boolean connectState = false;
+	private volatile boolean connectState = false;
 	private String connection = CONNECTION_STOPPED;
 
 	// Tcp variables
 	private InputStream inStream = null;
 	private OutputStream outStream = null;
 	private Thread inStreamThread = null;
-	private boolean threadEnd = false;
+	private volatile boolean threadEnd = false;
 
 	private TcpServer tcpServer = null;
 
@@ -144,6 +149,49 @@ public class CommsManager
 	private boolean extraView = false;
 
 	private DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+
+	private final class TcpClientSession
+	{
+		private final Socket socket;
+		private final InputStream input;
+		private final OutputStream output;
+		private volatile boolean open = true;
+		private Thread readerThread;
+
+		TcpClientSession(Socket socket) throws IOException
+		{
+			this.socket = socket;
+			this.input = socket.getInputStream();
+			this.output = socket.getOutputStream();
+		}
+
+		void start()
+		{
+			readerThread = new Thread(new InputStreamReader(input, this, true),
+					"UPMC TCP client " + socket.getRemoteSocketAddress());
+			readerThread.start();
+		}
+
+		synchronized void write(byte[] data) throws IOException
+		{
+			if (!open)
+				throw new IOException("TCP client is closed");
+			output.write(data);
+			output.flush();
+		}
+
+		void close()
+		{
+			open = false;
+			try
+			{
+				socket.close();
+			}
+			catch (IOException ignored)
+			{
+			}
+		}
+	}
 
 	// Date date = new Date();
 
@@ -593,7 +641,7 @@ public class CommsManager
 			{
 				inStream = serialPort.getInputStream();
 				outStream = serialPort.getOutputStream();
-				inStreamThread = (new Thread(new InputStreamReader(inStream)));
+				inStreamThread = (new Thread(new InputStreamReader(inStream, null, false), "UPMC serial reader"));
 				threadEnd = false;
 				inStreamThread.start();
 
@@ -637,6 +685,7 @@ public class CommsManager
 	{
 		protocolType = data.protocolType;
 		interfaceType = data.interfaceType;
+		tcpMode = data.tcpMode;
 		appendNewLine = data.appendNewline;
 		appendNewLineTimeout = data.appendNewLineTimeout;
 
@@ -647,7 +696,7 @@ public class CommsManager
 				tcpClientSocket = new Socket(host, port);
 				inStream = new DataInputStream(tcpClientSocket.getInputStream());
 				outStream = new DataOutputStream(tcpClientSocket.getOutputStream());
-				inStreamThread = (new Thread(new InputStreamReader(inStream)));
+				inStreamThread = (new Thread(new InputStreamReader(inStream, null, true), "UPMC TCP client reader"));
 				threadEnd = false;
 				inStreamThread.start();
 
@@ -662,17 +711,17 @@ public class CommsManager
 			}
 			catch (UnknownHostException e)
 			{
-				statusLabel.setText("Unknown host: " + host);
+				setStatus("Unknown host: " + host);
 				conn = TcpServer.State.STOPPED;
 			}
 			catch (IOException e)
 			{
-				statusLabel.setText("No I/O to host " + host);
+				setStatus("No I/O to host " + host);
 				conn = TcpServer.State.STOPPED;
 			}
 			catch (Exception e)
 			{
-				statusLabel.setText("Whoops! It didn't work (Client)!\n");
+				setStatus("Whoops! It didn't work (Client)!");
 				conn = TcpServer.State.STOPPED;
 			}
 		}
@@ -682,6 +731,7 @@ public class CommsManager
 			{
 				tcpServer = new TcpServer(); // Create the server
 				tcpServer.setPort(port); // Set the port
+				tcpServer.setExecutor(null); // Accept sessions in arrival order
 				TcpServer.setLoggingLevel(Level.SEVERE);
 
 				tcpServer.addPropertyChangeListener("state", new PropertyChangeListener()
@@ -702,23 +752,24 @@ public class CommsManager
 								{
 									switch (state)
 									{
-										case STARTING:
-											statusLabel.setText("Starting");
-											conn = TcpServer.State.STARTING;
-											break;
-										case STARTED:
-											statusLabel.setText("Started");
-											conn = TcpServer.State.STARTED;
-											connectState = true;
-											break;
-										case STOPPING:
-											statusLabel.setText("Stopping");
-											conn = TcpServer.State.STOPPING;
-											break;
-										case STOPPED:
-											statusLabel.setText("Stopped");
-											conn = TcpServer.State.STOPPED;
-											break;
+									case STARTING:
+										setStatus("Starting");
+										conn = TcpServer.State.STARTING;
+										break;
+									case STARTED:
+										updateServerStatus();
+										conn = TcpServer.State.STARTED;
+										connectState = true;
+										break;
+									case STOPPING:
+										setStatus("Stopping");
+										conn = TcpServer.State.STOPPING;
+										break;
+									case STOPPED:
+										setStatus("Stopped");
+										conn = TcpServer.State.STOPPED;
+										connectState = false;
+										break;
 										default:
 											assert false : state;
 											break;
@@ -727,17 +778,21 @@ public class CommsManager
 							});
 						} // end if(TcpServer.STATE_PROP.equals(prop))
 
-						try
+						if (TcpServer.STATE_PROP.equals(prop))
 						{
-							// propSupport.firePropertyChange(prop, oldVal,
-							// newVal);
-							propSupport.firePropertyChange("CommsManager", connection, CONNECTION_STARTED);
-							connection = CONNECTION_STARTED;
+							String newConnection = connection;
+							TcpServer.State state = (TcpServer.State) newVal;
+							if (state == TcpServer.State.STARTING)
+								newConnection = CONNECTION_STARTING;
+							else if (state == TcpServer.State.STARTED)
+								newConnection = CONNECTION_STARTED;
+							else if (state == TcpServer.State.STOPPING)
+								newConnection = CONNECTION_STOPPING;
+							else if (state == TcpServer.State.STOPPED)
+								newConnection = CONNECTION_STOPPED;
+							propSupport.firePropertyChange("CommsManager", connection, newConnection);
+							connection = newConnection;
 						}
-						catch (Exception exc)
-						{
-							statusLabel.setText("A property change listener threw an exception: " + exc.getMessage());
-						} // end catch
 
 						if (TcpServer.PORT_PROP.equals(evt.getPropertyName()))
 						{
@@ -759,16 +814,10 @@ public class CommsManager
 							{ // New stream
 								try
 								{
-									if (statusLabel != null)
-										statusLabel.setText("Connection from " + evt.getSocket().getInetAddress() + " established");
-
-									tcpServerSocket = evt.getSocket();
-
-									inStream = evt.getSocket().getInputStream();
-									outStream = evt.getSocket().getOutputStream();
-									inStreamThread = (new Thread(new InputStreamReader(inStream)));
-									threadEnd = false;
-									inStreamThread.start();
+									TcpClientSession session = new TcpClientSession(evt.getSocket());
+									tcpServerClients.add(session);
+									updateServerStatus();
+									session.start();
 								}
 								catch (Exception e)
 								{
@@ -780,7 +829,7 @@ public class CommsManager
 			}
 			catch (Exception e)
 			{
-				statusLabel.setText("Whoops! It didn't work (Server)!\n");
+				setStatus("Whoops! It didn't work (Server)!");
 				e.printStackTrace();
 				conn = TcpServer.State.STOPPED;
 			}
@@ -798,8 +847,9 @@ public class CommsManager
 	 */
 	private class InputStreamReader implements Runnable
 	{
-		// private class TcpReader extends Thread {
-		InputStream in;
+		private final InputStream in;
+		private final TcpClientSession session;
+		private final boolean blockingInput;
 		boolean msg_start = false;
 		int bufLength = 0;
 		private Timer timeout;
@@ -808,10 +858,11 @@ public class CommsManager
 		private int data_len = 0;
 		private boolean debug_rx = false;
 
-		// public TcpReader(BufferedReader in)
-		public InputStreamReader(InputStream in)
+		public InputStreamReader(InputStream in, TcpClientSession session, boolean blockingInput)
 		{
 			this.in = in;
+			this.session = session;
+			this.blockingInput = blockingInput;
 		}
 
 		public void run()
@@ -820,7 +871,8 @@ public class CommsManager
 			byte[] rxBuf = new byte[1038];
 
 			int len = -1;
-			connectState = true;
+			if (session == null)
+				connectState = true;
 
 			timeout = new Timer(250, new ActionListener()
 			{
@@ -878,15 +930,16 @@ public class CommsManager
 
 			try
 			{
-				while (!threadEnd)
+				while (session != null ? session.open : !threadEnd)
 				{
-					if ((in.available()) > 0)
+					if (blockingInput || (in.available()) > 0)
 					{
 						String rxStr = "";
-						if ((len = this.in.read(buffer)) > -1)
+						len = this.in.read(buffer);
+						if (len < 0)
+							break;
+						if (len > 0)
 						{
-							checkRxBoxMaxLines();
-
 							// //////////////////////////////----NSP1----//////////////////////////////////////
 
 							if (protocolType == ProtocolType.NSP)
@@ -951,21 +1004,16 @@ public class CommsManager
 										String rxXORData = new String((rxStr).trim().substring(rxStr.length() - 3, rxStr.trim().length())).trim();
 
 										if (!calcXORHeader.equals(rxXORHeader))
-											statusLabel.setText("NSP1 Header Checksum Error!");
-										else if (!calcXORData.equals(rxXORData))
-											statusLabel.setText("NSP1 Data Checksum Error!");
-										else
-										{
-											statusLabel.setText("NSP1 Message Received");
+										setStatus("NSP1 Header Checksum Error!");
+									else if (!calcXORData.equals(rxXORData))
+										setStatus("NSP1 Data Checksum Error!");
+									else
+									{
+										setStatus("NSP1 Message Received");
 											chkSimulation(rxStr);
 										}
 
-										if (rxBox != null)
-										{
-											rxBox.append((rxStr + "\n").toUpperCase());
-											rxBox.setCaretPosition(rxBox.getText().length());
-											System.gc();
-										}
+									appendReceived((rxStr + "\n").toUpperCase());
 
 										// Subtract the handled message from the
 										// buffer and check for a new start of
@@ -1040,19 +1088,14 @@ public class CommsManager
 										String rxCRC = new String((rxStr).trim().substring(rxStr.length() - 3, rxStr.length())).trim();
 
 										if (!calcCRC.equals(rxCRC))
-											statusLabel.setText("NSP1 Header Checksum Error!");
-										else
-										{
-											statusLabel.setText("NSP1 Message Received");
+										setStatus("NSP1 Header Checksum Error!");
+									else
+									{
+										setStatus("NSP1 Message Received");
 											chkSimulation(rxStr);
 										}
 
-										if (rxBox != null)
-										{
-											rxBox.append((rxStr + "\n").toUpperCase());
-											rxBox.setCaretPosition(rxBox.getText().length() - 1);
-											System.gc();
-										}
+									appendReceived((rxStr + "\n").toUpperCase());
 
 										// Subtract the handled message from the
 										// buffer and check for a new start of
@@ -1180,21 +1223,16 @@ public class CommsManager
 										String rxCRCData = new String((rxStr).trim().substring(rxStr.length() - 5, rxStr.length())).trim();
 
 										if (!calcCRCHeader.equals(rxCRCHeader))
-											statusLabel.setText("NSP2 Header Checksum Error!");
-										else if (!calcCRCData.equals(rxCRCData))
-											statusLabel.setText("NSP2 Data Checksum Error!");
-										else
-										{
-											statusLabel.setText("NSP2 Message Received");
+										setStatus("NSP2 Header Checksum Error!");
+									else if (!calcCRCData.equals(rxCRCData))
+										setStatus("NSP2 Data Checksum Error!");
+									else
+									{
+										setStatus("NSP2 Message Received");
 											chkSimulation(rxStr);
 										}
 
-										if (rxBox != null)
-										{
-											rxBox.append((rxStr + "\n").toUpperCase());
-											rxBox.setCaretPosition(rxBox.getText().length());
-											System.gc();
-										}
+									appendReceived((rxStr + "\n").toUpperCase());
 
 										// Subtract the handled message from the
 										// buffer and check for a new start of
@@ -1269,19 +1307,14 @@ public class CommsManager
 										String rxCRC = new String((rxStr).trim().substring(rxStr.length() - 5, rxStr.length())).trim();
 
 										if (!calcCRC.equals(rxCRC))
-											statusLabel.setText("NSP2 Header Checksum Error!");
-										else
-										{
-											statusLabel.setText("NSP2 Message Received");
+										setStatus("NSP2 Header Checksum Error!");
+									else
+									{
+										setStatus("NSP2 Message Received");
 											chkSimulation(rxStr);
 										}
 
-										if (rxBox != null)
-										{
-											rxBox.append((rxStr + "\n").toUpperCase());
-											rxBox.setCaretPosition(rxBox.getText().length() - 1);
-											System.gc();
-										}
+									appendReceived((rxStr + "\n").toUpperCase());
 
 										// Subtract the handled message from the
 										// buffer and check for a new start of
@@ -1370,12 +1403,7 @@ public class CommsManager
 
 								rxStr = ByteArrayTohexString(rxBuf, bufLength);
 								
-								if (rxBox != null)
-								{
-									rxBox.append(rxStr.toUpperCase());
-									rxBox.setCaretPosition(rxBox.getText().length() - 1);
-									System.gc();
-								}
+								appendReceived(rxStr.toUpperCase());
 								
 								if(extraView)
 								{
@@ -1409,12 +1437,7 @@ public class CommsManager
 								}
 
 								rxStr = new String(buffer, 0, len);
-								if (rxBox != null)
-								{
-									rxBox.append(rxStr);
-									rxBox.setCaretPosition(rxBox.getText().length() - 1);
-									System.gc();
-								}
+								appendReceived(rxStr);
 								if (logTofile)
 								{
 									logfile.write(rxStr);
@@ -1438,24 +1461,19 @@ public class CommsManager
 			}
 			catch (IOException e)
 			{
-				threadEnd = true;
-				try
-				{
-					in.close();
-				}
-				catch (IOException e1)
-				{
-					e1.printStackTrace();
-				}
-
-				connectState = false;
-				if (statusLabel != null)
-					statusLabel.setText("Connection has been interrupted");
-				// propSupport.firePropertyChange("State", "STARTED",
-				// "INTERRUPTED");
-				propSupport.firePropertyChange("CommsManager", connection, CONNECTION_INTERRUPT);
-				connection = CONNECTION_INTERRUPT;
-				// disconnect();
+				if (session == null && !threadEnd)
+					handleConnectionInterrupted();
+			}
+			finally
+			{
+				if (timeout != null)
+					timeout.stop();
+				if (newLineTimeout != null)
+					newLineTimeout.stop();
+				if (session != null)
+					removeServerClient(session);
+				else if (blockingInput && !threadEnd && connectState)
+					handleConnectionInterrupted();
 			}
 		}
 
@@ -1470,11 +1488,149 @@ public class CommsManager
 				{
 					if (rxStr.trim().toUpperCase().equals(simulateReceiveMsg[loop].toUpperCase()))
 					{
-						writeData(simulateTransmitMsg[loop]);
+						if (session != null)
+							writeDataToSession(session, simulateTransmitMsg[loop]);
+						else
+							writeData(simulateTransmitMsg[loop]);
 						return;
 					}
 				}
 			}
+		}
+	}
+
+	private void handleConnectionInterrupted()
+	{
+		connectState = false;
+		setStatus("Connection has been interrupted");
+		propSupport.firePropertyChange("CommsManager", connection, CONNECTION_INTERRUPT);
+		connection = CONNECTION_INTERRUPT;
+	}
+
+	private void removeServerClient(TcpClientSession session)
+	{
+		session.close();
+		if (tcpServerClients.remove(session))
+			updateServerStatus();
+	}
+
+	private void updateServerStatus()
+	{
+		int count = tcpServerClients.size();
+		setStatus("TCP Server - " + count + (count == 1 ? " client connected" : " clients connected"));
+	}
+
+	private void setStatus(final String text)
+	{
+		if (statusLabel == null)
+			return;
+		if (SwingUtilities.isEventDispatchThread())
+			statusLabel.setText(text);
+		else
+			SwingUtilities.invokeLater(new Runnable()
+			{
+				public void run()
+				{
+					statusLabel.setText(text);
+				}
+			});
+	}
+
+	private void appendReceived(final String text)
+	{
+		if (rxBox == null)
+			return;
+		SwingUtilities.invokeLater(new Runnable()
+		{
+			public void run()
+			{
+				checkRxBoxMaxLines();
+				rxBox.append(text);
+				rxBox.setCaretPosition(rxBox.getText().length());
+			}
+		});
+	}
+
+	int getTcpServerClientCount()
+	{
+		return tcpServerClients.size();
+	}
+
+	private boolean writeDataToSession(TcpClientSession session, String msg)
+	{
+		try
+		{
+			byte[] data = hexStringToByteArray(msg);
+			session.write(data);
+			recordTransmission(data);
+			return true;
+		}
+		catch (IOException e)
+		{
+			removeServerClient(session);
+			return false;
+		}
+	}
+
+	private void recordTransmission(final byte[] data)
+	{
+		final String message = ByteArrayTohexString(data, data.length).toUpperCase();
+		if (txBox != null)
+		{
+			SwingUtilities.invokeLater(new Runnable()
+			{
+				public void run()
+				{
+					checkTxBoxMaxLines();
+					txBox.append(message + "\n");
+					txBox.setCaretPosition(txBox.getText().length());
+				}
+			});
+		}
+		if (logTofile)
+		{
+			try
+			{
+				logfile.write(dateFormat.format(new Date()) + ": --> " + message + "\n");
+			}
+			catch (IOException e)
+			{
+				LOGGER.log(Level.WARNING, "Could not write TCP simulator response to the log", e);
+			}
+		}
+	}
+
+	private boolean writeBytes(byte[] buffer)
+	{
+		if (interfaceType == INTERFACE_TCP && tcpMode == PortSettings.TCP_SERVER)
+		{
+			boolean success = false;
+			for (TcpClientSession session : tcpServerClients)
+			{
+				try
+				{
+					session.write(buffer);
+					success = true;
+				}
+				catch (IOException e)
+				{
+					removeServerClient(session);
+				}
+			}
+			return success;
+		}
+
+		if (outStream == null)
+			return false;
+		try
+		{
+			outStream.write(buffer);
+			outStream.flush();
+			return true;
+		}
+		catch (IOException e)
+		{
+			return false;
 		}
 	}
 
@@ -1536,28 +1692,19 @@ public class CommsManager
 			tcpClientSocket = null;
 		}
 
-		try
-		{
-			if (tcpServerSocket != null)
-			{
-				tcpServerSocket.close();
-				tcpServerSocket = null;
-			}
-		}
-		catch (IOException e)
-		{
-			tcpServerSocket = null;
-		}
+		for (TcpClientSession session : tcpServerClients)
+			session.close();
+		tcpServerClients.clear();
 
 		if (tcpServer != null)
 		{
 			tcpServer.stop();
 			tcpServer = null;
 		}
+		tcpMode = 0;
 
 		System.out.println("Connection disconnected");
-		if (statusLabel != null)
-			statusLabel.setText("Connection disconnected");
+		setStatus("Connection disconnected");
 
 		propSupport.firePropertyChange("CommsManager", connection, CONNECTION_STOPPED);
 		connection = CONNECTION_STOPPED;
@@ -1587,7 +1734,14 @@ public class CommsManager
 			{
 				byte[] buffer = hexStringToByteArray(msg);
 
-				outStream.write(buffer);
+				if (!writeBytes(buffer))
+				{
+					if (tcpMode == PortSettings.TCP_SERVER)
+						setStatus("TCP Server - no clients connected");
+					else
+						disconnect();
+					return;
+				}
 
 				if (txBox != null)
 				{
@@ -1637,7 +1791,8 @@ public class CommsManager
 				{
 					byte[] buffer = hexStringToByteArray(data.Header + data.HeaderCS + data.Body + data.BodyCS);
 
-					outStream.write(buffer);
+					if (!writeBytes(buffer))
+						throw new IOException("No writable connection");
 
 					if (txBox != null)
 					{
@@ -1654,7 +1809,8 @@ public class CommsManager
 				{
 					byte[] buffer = hexStringToByteArray(data.Body);
 
-					outStream.write(buffer);
+					if (!writeBytes(buffer))
+						throw new IOException("No writable connection");
 
 					if (txBox != null)
 					{
@@ -1669,7 +1825,8 @@ public class CommsManager
 				}
 				else if (data.protocolType == ProtocolType.TEXT)
 				{
-					outStream.write((data.Body + "\n").getBytes());
+					if (!writeBytes((data.Body + "\n").getBytes()))
+						throw new IOException("No writable connection");
 
 					if (txBox != null)
 					{
@@ -1683,21 +1840,22 @@ public class CommsManager
 				}
 				else
 				{
-					if (statusLabel != null)
-						statusLabel.setText("Protocol not supported, please rectify the protocol and try again");
+					setStatus("Protocol not supported, please rectify the protocol and try again");
 					success = true;
 				}
 			}
 			catch (IOException e)
 			{
-				disconnect();
+				if (tcpMode == PortSettings.TCP_SERVER)
+					setStatus("TCP Server - no clients connected");
+				else
+					disconnect();
 			}
 		}
 		else
 		{
 			System.out.println("No port is connected.");
-			if (statusLabel != null)
-				statusLabel.setText("No port is connected.");
+			setStatus("No port is connected.");
 		}
 		return success;
 	}
