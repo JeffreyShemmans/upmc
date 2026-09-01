@@ -9,8 +9,23 @@ build output are intentionally excluded.
 
 ## Run
 
-Download `upmc-1.2.0.jar` from the latest GitHub Release, then launch it with a
-Java runtime:
+Download `upmc-1.2.0.jar` and the launcher for your operating system from the
+latest GitHub Release. Keep the two files in the same folder.
+
+On Linux, make the launcher executable once and run it:
+
+```shell
+chmod +x upmc.sh
+./upmc.sh
+```
+
+On Windows, double-click `upmc.bat` or run it from Command Prompt:
+
+```batch
+upmc.bat
+```
+
+You can also launch the JAR directly with a Java runtime:
 
 ```shell
 java -jar upmc-1.2.0.jar
@@ -40,9 +55,10 @@ java -jar target/upmc-1.2.0.jar
 
 GitHub Actions builds and tests UPMC for pull requests and pushes to `main`.
 The workflow can also be run manually against any branch from the Actions tab.
-Each successful run smoke-tests the executable JAR and publishes it as the
-`upmc-standalone` workflow artifact. Pushing a version tag such as `v1.2.0`
-builds the same source and publishes the JAR as a GitHub Release download.
+Each successful run smoke-tests the executable JAR and publishes it with the
+Linux and Windows launchers as the `upmc-standalone` workflow artifact. Pushing
+a version tag such as `v1.2.0` builds the same source and publishes the JAR and
+both launchers as GitHub Release downloads.
 
 ## Tested communication
 
